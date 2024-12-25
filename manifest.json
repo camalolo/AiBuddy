@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "AI Explain & Read",
+  "version": "1.0",
+  "description": "Send selected text to an AI and ask for what it means, or read it in natural voice.",
+  "permissions": [
+    "contextMenus",
+    "tabs",
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "options_page": "options.html"
+}
