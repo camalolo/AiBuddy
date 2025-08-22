@@ -6,7 +6,8 @@ chrome.runtime.onInstalled.addListener(() => {
     { action: 'explain', title: 'Explain with' },
     { action: 'factCheck', title: 'Fact Check with' },
     { action: 'translateFr', title: 'Translate to French with' },
-    { action: 'translateEn', title: 'Translate to English with' }
+    { action: 'translateEn', title: 'Translate to English with' },
+    { action: 'spellCheck', title: 'Spellcheck with' }
   ];
   
   const services = [
@@ -19,13 +20,13 @@ chrome.runtime.onInstalled.addListener(() => {
   menuItems.forEach(({ action, title }) => {
     services.forEach(({ id, url }) => {
       // Only use ChatGPT for translations
-      if ((action === 'translateFr' || action === 'translateEn') && id === 'ChatGPT') {
+      if ((action === 'translateFr' || action === 'translateEn' || action === 'spellCheck') && id === 'ChatGPT') {
         chrome.contextMenus.create({
           id: `${action}${id}`,
           title: `${title} ${id}`,
           contexts: ["selection"]
         });
-      } else if (action !== 'translateFr' && action !== 'translateEn') {
+      } else if (action !== 'translateFr' && action !== 'translateEn' && action !== 'spellCheck') {
         // For non-translation actions, create menu items for all services
         chrome.contextMenus.create({
           id: `${action}${id}`, 
@@ -211,6 +212,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const isFactCheck = info.menuItemId.startsWith('factCheck');
     const isTranslateFr = info.menuItemId.startsWith('translateFr');
     const isTranslateEn = info.menuItemId.startsWith('translateEn');
+    const isSpellCheck = info.menuItemId.startsWith('spellCheck');
     const service = Object.keys(services).find(s => info.menuItemId.includes(s));
 
     if (service) {
@@ -221,6 +223,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         prompt = `Translate the following text to French: ${info.selectionText}`;
       } else if (isTranslateEn) {
         prompt = `Translate the following text to English: ${info.selectionText}`;
+      } else if (isSpellCheck) {
+        prompt = `Perform a spellcheck of the following text: ${info.selectionText}`;
       } else {
         prompt = `Explain the meaning of the following text: ${info.selectionText}`;
       }
