@@ -18,26 +18,47 @@ chrome.runtime.onInstalled.addListener(() => {
     { id: 'Claude', url: 'https://claude.ai/new?q=' }
   ];
 
-  // Create all menu items dynamically
-  menuItems.forEach(({ action, title }) => {
-    services.forEach(({ id, url }) => {
-      const restrictedActions = new Set(['translateFr', 'translateEn', 'spellCheck', 'weiWuTranslate', 'fixGrammar']);
-      if (restrictedActions.has(action) && id === 'ChatGPT') {
-        chrome.contextMenus.create({
-          id: `${action}${id}`,
-          title: `${title} ${id}`,
-          contexts: ["selection"]
-        });
-      } else if (!restrictedActions.has(action)) {
-        // For non-restricted actions, create menu items for all services
-        chrome.contextMenus.create({
-          id: `${action}${id}`,
-          title: `${title} ${id}`,
-          contexts: ["selection"]
-        });
-      }
+  // Create menu items in groups with separators
+  const restrictedActions = new Set(['translateFr', 'translateEn', 'spellCheck', 'weiWuTranslate', 'fixGrammar']);
+  const group1 = [{ action: 'explain', title: 'Explain with' }];
+  const group2 = [{ action: 'factCheck', title: 'Fact Check with' }];
+  const group3 = [
+    { action: 'translateFr', title: 'Translate to French with' },
+    { action: 'translateEn', title: 'Translate to English with' },
+    { action: 'spellCheck', title: 'Spellcheck with' },
+    { action: 'weiWuTranslate', title: 'WeiWu Translator' },
+    { action: 'fixGrammar', title: 'Fix Grammar with' }
+  ];
+
+  function createMenuItemsForGroup(group, separatorId) {
+    group.forEach(({ action, title }) => {
+      services.forEach(({ id }) => {
+        if (restrictedActions.has(action) && id === 'ChatGPT') {
+          chrome.contextMenus.create({
+            id: `${action}${id}`,
+            title: `${title} ${id}`,
+            contexts: ["selection"]
+          });
+        } else if (!restrictedActions.has(action)) {
+          chrome.contextMenus.create({
+            id: `${action}${id}`,
+            title: `${title} ${id}`,
+            contexts: ["selection"]
+          });
+        }
+      });
     });
-  });
+    // Create separator after group
+    chrome.contextMenus.create({
+      id: separatorId,
+      type: 'separator',
+      contexts: ["selection"]
+    });
+  }
+
+  createMenuItemsForGroup(group1, 'separator1');
+  createMenuItemsForGroup(group2, 'separator2');
+  createMenuItemsForGroup(group3, 'separator3');
 
   // Create Read Text Aloud option
   chrome.contextMenus.create({
@@ -101,6 +122,117 @@ async function showPlayingIndicator(tabId) {
       }
     `
   });
+}
+
+async function callOpenAIChatAPI(apiKey, prompt) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4.1-nano',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.2
+    })
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+  }
+  const data = await response.json();
+  return data.choices[0].message.content.trim();
+}
+
+async function handleFixGrammar(tabId, selectionText) {
+  try {
+    const result = await chrome.storage.sync.get(['openaiApiKey']);
+    const apiKey = result.openaiApiKey;
+    if (!apiKey) {
+      chrome.runtime.openOptionsPage();
+      return;
+    }
+    const prompt = `Fix the grammar and syntax of the following text so it is proper, respectful, and understandable by a third party. Keep it in the original language. Just return the corrected text and nothing else : ${selectionText}`;
+    const correctedText = await callOpenAIChatAPI(apiKey, prompt);
+
+    // Inject script to detect editable or read-only and replace or show popup
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (corrected) => {
+        function isEditable(element) {
+          if (!element) return false;
+          if (element.isContentEditable) return true;
+          if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+            return !element.readOnly && !element.disabled;
+          }
+          return false;
+        }
+
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        const range = selection.getRangeAt(0);
+        const commonAncestor = range.commonAncestorContainer;
+        let editableElement = null;
+
+        if (commonAncestor.nodeType === Node.ELEMENT_NODE) {
+          if (isEditable(commonAncestor)) {
+            editableElement = commonAncestor;
+          }
+        } else if (commonAncestor.nodeType === Node.TEXT_NODE) {
+          if (isEditable(commonAncestor.parentElement)) {
+            editableElement = commonAncestor.parentElement;
+          }
+        }
+
+        if (editableElement) {
+          // Replace selected text in editable element
+          const start = editableElement.selectionStart;
+          const end = editableElement.selectionEnd;
+          if (typeof start === 'number' && typeof end === 'number') {
+            const value = editableElement.value;
+            editableElement.value = value.slice(0, start) + corrected + value.slice(end);
+            // Set cursor after replaced text
+            editableElement.selectionStart = editableElement.selectionEnd = start + corrected.length;
+          } else {
+            // Fallback: replace selection with document.execCommand
+            document.execCommand('insertText', false, corrected);
+          }
+        } else {
+          // Show popup with corrected text
+          const popup = document.createElement('div');
+          popup.style.position = 'fixed';
+          popup.style.background = 'white';
+          popup.style.border = '1px solid black';
+          popup.style.padding = '8px';
+          popup.style.zIndex = 2147483647;
+          popup.style.maxWidth = '300px';
+          popup.style.whiteSpace = 'pre-wrap';
+          popup.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+          popup.textContent = corrected;
+
+          // Position popup near selection
+          const rect = range.getBoundingClientRect();
+          popup.style.top = `${rect.bottom + 5}px`;
+          popup.style.left = `${rect.left}px`;
+
+          document.body.appendChild(popup);
+
+          // Remove popup on click or after 10 seconds
+          function removePopup() {
+            popup.remove();
+            document.removeEventListener('click', removePopup);
+          }
+          document.addEventListener('click', removePopup);
+          setTimeout(removePopup, 10000);
+        }
+      },
+      args: [correctedText]
+    });
+  } catch (error) {
+    console.error('Error fixing grammar:', error);
+    chrome.runtime.openOptionsPage();
+  }
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -220,25 +352,27 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const service = Object.keys(services).find(s => info.menuItemId.includes(s));
 
     if (service) {
-      let prompt;
-      if (isFactCheck) {
-        prompt = `Fact check for truthfulness the following text: ${info.selectionText}`;
-      } else if (isTranslateFr) {
-        prompt = `Translate the following text to French: ${info.selectionText}`;
-      } else if (isTranslateEn) {
-        prompt = `Translate the following text to English: ${info.selectionText}`;
-      } else if (isSpellCheck) {
-        prompt = `Perform a spellcheck of the following text: ${info.selectionText}`;
-      } else if (isWeiWuTranslate) {
-        prompt = `Translate text into Wei Wu style: broken English, no a/an/the, wrong verbs (be victory, society be collapsing), mix tenses (soon destroy, I'm believe), short choppy sentences, awkward word choice (possession, give me number 1 most confusion), exaggeration, funny memes or mild stereotypes if fit. Keep main meaning. Translate this text : ${info.selectionText}`;
-      } else if (isFixGrammar) {
-        prompt = `Fix the grammar and syntax of the following text so it is proper, respectful, and understandable by a third party: ${info.selectionText}`;
+      if (isFixGrammar) {
+        await handleFixGrammar(tab.id, info.selectionText);
       } else {
-        prompt = `Explain the meaning of the following text: ${info.selectionText}`;
+        let prompt;
+        if (isFactCheck) {
+          prompt = `Fact check for truthfulness the following text: ${info.selectionText}`;
+        } else if (isTranslateFr) {
+          prompt = `Translate the following text to French: ${info.selectionText}`;
+        } else if (isTranslateEn) {
+          prompt = `Translate the following text to English: ${info.selectionText}`;
+        } else if (isSpellCheck) {
+          prompt = `Perform a spellcheck of the following text: ${info.selectionText}`;
+        } else if (isWeiWuTranslate) {
+          prompt = `Translate text into Wei Wu style: broken English, no a/an/the, wrong verbs (be victory, society be collapsing), mix tenses (soon destroy, I'm believe), short choppy sentences, awkward word choice (possession, give me number 1 most confusion), exaggeration, funny memes or mild stereotypes if fit. Keep main meaning. Translate this text : ${info.selectionText}`;
+        } else {
+          prompt = `Explain the meaning of the following text: ${info.selectionText}`;
+        }
+        
+        const url = `${services[service]}${encodeURIComponent(prompt)}`;
+        chrome.tabs.create({ url });
       }
-      
-      const url = `${services[service]}${encodeURIComponent(prompt)}`;
-      chrome.tabs.create({ url });
     }
   }
 });
