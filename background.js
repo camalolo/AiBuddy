@@ -153,7 +153,7 @@ async function handleFixGrammar(tabId, selectionText) {
       chrome.runtime.openOptionsPage();
       return;
     }
-    const prompt = `Fix the grammar and syntax of the following text so it is proper, respectful, and understandable by a third party. Keep it in the original language. Just return the corrected text and nothing else : ${selectionText}`;
+    const prompt = `Fix the grammar and syntax of the following text so it is proper, respectful, and understandable by a third party. Keep it in the original language and formatting. Just return the corrected text and nothing else : ${selectionText}`;
     const correctedText = await callOpenAIChatAPI(apiKey, prompt);
 
     // Inject script to detect editable or read-only and replace or show popup
