@@ -1,6 +1,5 @@
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Extension installed/updated');
-  
+
   // Define menu items configuration
   const menuItems = [
     { action: 'explain', title: 'Explain with' },
@@ -11,11 +10,9 @@ chrome.runtime.onInstalled.addListener(() => {
     { action: 'weiWuTranslate', title: 'WeiWu Translator' },
     { action: 'fixGrammar', title: 'Fix Grammar with' }
   ];
-  
+
   const services = [
-    { id: 'ChatGPT', url: 'https://chat.openai.com/?model=gpt-4&q=' },
-    { id: 'Perplexity', url: 'https://www.perplexity.ai/search?q=' },
-    { id: 'Claude', url: 'https://claude.ai/new?q=' }
+    { id: 'ChatGPT', url: 'https://chat.openai.com/?model=gpt-4&q=' }
   ];
 
   // Create menu items in groups with separators
@@ -66,7 +63,60 @@ chrome.runtime.onInstalled.addListener(() => {
     title: "Read Text Aloud",
     contexts: ["selection"]
   });
+
+  // Inject CSS for indicators once on install
+  injectIndicatorCSS();
 });
+
+// Function to inject CSS for TTS indicators
+function injectIndicatorCSS() {
+  const css = `
+    .tts-loading-indicator, .tts-playing-indicator, .tts-error-indicator {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 20px;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: system-ui, -apple-system, sans-serif;
+      animation: slideIn 0.3s ease-out;
+    }
+    .tts-loading-indicator::before, .tts-playing-indicator::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      background: #4ade80;
+      border-radius: 50%;
+    }
+    .tts-loading-indicator::before {
+      background: #ef4444;
+      animation: pulse 1s infinite;
+    }
+    .tts-playing-indicator::before {
+      animation: pulse 1s infinite;
+    }
+    .tts-error-indicator {
+      background: rgba(220, 38, 38, 0.8);
+    }
+    @keyframes slideIn {
+      from { transform: translateY(100px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
+  `;
+
+  // This will be injected when needed, but we can prepare it
+  // For now, keep the injection in the functions, but consolidated
+}
 
 async function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -124,7 +174,7 @@ async function showPlayingIndicator(tabId) {
   });
 }
 
-async function callOpenAIChatAPI(apiKey, prompt) {
+async function callOpenAIChatAPI(apiKey, model, prompt) {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -132,7 +182,7 @@ async function callOpenAIChatAPI(apiKey, prompt) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'gpt-4.1-nano',
+      model: model,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2
     })
@@ -147,14 +197,15 @@ async function callOpenAIChatAPI(apiKey, prompt) {
 
 async function handleFixGrammar(tabId, selectionText) {
   try {
-    const result = await chrome.storage.sync.get(['openaiApiKey']);
+    const result = await chrome.storage.sync.get(['openaiApiKey', 'selectedModel']);
     const apiKey = result.openaiApiKey;
-    if (!apiKey) {
+    const model = result.selectedModel;
+    if (!apiKey || !model) {
       chrome.runtime.openOptionsPage();
       return;
     }
     const prompt = `Fix the grammar and syntax of the following text so it is proper, respectful, and understandable by a third party. Keep it in the original language and formatting. Just return the corrected text and nothing else : ${selectionText}`;
-    const correctedText = await callOpenAIChatAPI(apiKey, prompt);
+    const correctedText = await callOpenAIChatAPI(apiKey, model, prompt);
 
     // Inject script to detect editable or read-only and replace or show popup
     await chrome.scripting.executeScript({
@@ -239,7 +290,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "readSelectedText" && info.selectionText) {
     debouncedTTS(async () => {
       try {
-        console.log('Read Text Aloud clicked');
         
         // Get the API key and voice selection from storage
         const result = await chrome.storage.sync.get(['openaiApiKey', 'selectedVoice']);
@@ -247,7 +297,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         const voice = result.selectedVoice || 'alloy';
         
         if (!apiKey) {
-          console.log('No API key found, opening options page');
           chrome.runtime.openOptionsPage();
           return;
         }
@@ -337,9 +386,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   // Handle AI service actions
   if (info.selectionText) {
     const services = {
-      ChatGPT: 'https://chat.openai.com/?model=gpt-4&q=',
-      Perplexity: 'https://www.perplexity.ai/search?q=',
-      Claude: 'https://claude.ai/new?q='
+      ChatGPT: 'https://chat.openai.com/?model=gpt-4&q='
     };
 
     // Extract action and service from menuItemId
@@ -404,6 +451,15 @@ async function showLoadingIndicator(tabId) {
         background: #ef4444;
         border-radius: 50%;
         animation: pulse 1s infinite;
+      }
+      @keyframes slideIn {
+        from { transform: translateY(100px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.4; }
+        100% { opacity: 1; }
       }
     `
   });
