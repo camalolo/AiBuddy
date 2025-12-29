@@ -2,6 +2,9 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+// Private key for CRX signing is stored outside repository at: ../Chrome-Extension-Keys/key.pem
+// Use: npx crx pack ./ -o "output.crx" -p ../Chrome-Extension-Keys/key.pem
+
 try {
   // Read manifest.json to get version
   const manifest = JSON.parse(fs.readFileSync('./manifest.json', 'utf8'));
