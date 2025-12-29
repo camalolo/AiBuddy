@@ -35,4 +35,15 @@ export default [
     files: ["background.js", "context-menus.js", "messaging.js", "api.js", "tools.js", "tts.js", "utilities.js"],
     languageOptions: { sourceType: "module" },
   },
+  {
+    files: ["pack.mjs"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
+    ignores: ["tag_release.sh", "key.pem", "dist/**", "web-ext-artifacts/**"],
+  },
 ];

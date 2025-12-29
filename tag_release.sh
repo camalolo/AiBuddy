@@ -94,6 +94,26 @@ if [ "$SHOULD_TAG" = true ]; then
   # Create annotated tag
   git tag -a "v$CURRENT_MANIFEST_VERSION" -m "Release v$CURRENT_MANIFEST_VERSION"
 
+  # Pack extension to CRX
+  echo "Packing extension to CRX..."
+  mkdir -p dist
+  if ! npm run pack; then
+    echo "Error: Failed to pack extension to CRX. Aborting."
+    exit 1
+  fi
+
+  # Create GitHub release
+  echo "Creating GitHub release..."
+  ZIP_FILE="dist/ai-buddy-v$CURRENT_MANIFEST_VERSION.zip"
+  if ! gh release create "v$CURRENT_MANIFEST_VERSION" \
+    --title "Release v$CURRENT_MANIFEST_VERSION" \
+    --generate-notes \
+    --latest \
+    "$ZIP_FILE"; then
+    echo "Error: Failed to create GitHub release. Aborting."
+    exit 1
+  fi
+
   # Push current branch and the new tag to origin
   echo "Pushing changes and tag v$CURRENT_MANIFEST_VERSION to $GIT_REMOTE..."
   git push "$GIT_REMOTE" "$MAIN_BRANCH"
