@@ -94,6 +94,13 @@ if [ "$SHOULD_TAG" = true ]; then
   # Create annotated tag
   git tag -a "v$CURRENT_MANIFEST_VERSION" -m "Release v$CURRENT_MANIFEST_VERSION"
 
+  # Push the new tag first (GitHub CLI needs it to exist remotely)
+  echo "Pushing tag v$CURRENT_MANIFEST_VERSION to $GIT_REMOTE..."
+  if ! git push "$GIT_REMOTE" "v$CURRENT_MANIFEST_VERSION"; then
+    echo "Error: Failed to push tag v$CURRENT_MANIFEST_VERSION. Aborting."
+    exit 1
+  fi
+
   # Pack extension to CRX
   echo "Packing extension to CRX..."
   mkdir -p dist
@@ -114,17 +121,11 @@ if [ "$SHOULD_TAG" = true ]; then
     exit 1
   fi
 
-  # Push current branch and the new tag to origin
-  echo "Pushing changes and tag v$CURRENT_MANIFEST_VERSION to $GIT_REMOTE..."
+  # Push current branch to origin
+  echo "Pushing changes to $GIT_REMOTE/$MAIN_BRANCH..."
   git push "$GIT_REMOTE" "$MAIN_BRANCH"
-  git push "$GIT_REMOTE" "v$CURRENT_MANIFEST_VERSION"
 
-  if [ $? -eq 0 ]; then
-    echo "Successfully created and pushed tag v$CURRENT_MANIFEST_VERSION."
-  else
-    echo "Error: Failed to push tag v$CURRENT_MANIFEST_VERSION."
-    exit 1
-  fi
+   echo "Successfully created release v$CURRENT_MANIFEST_VERSION with extension package."
 else
   echo "No new tag created."
 fi
