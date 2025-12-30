@@ -1,6 +1,6 @@
 # AI Buddy Chrome Extension
 
-**Version:** 1.1.0
+**Version:** 1.1.4
 
 This Chrome extension enhances your browsing experience by integrating powerful AI capabilities directly into your context menu. With this extension, you can easily explain selected text, fact-check information, translate content, fix grammar, and even have text read aloud using advanced text-to-speech.
 
@@ -106,3 +106,7 @@ The extension requires the following permissions:
 Repository: [https://github.com/camalolo/AiBuddy](https://github.com/camalolo/AiBuddy)
 
 Feel free to fork the repository, make improvements, and submit pull requests.
+
+## Icon Attribution
+
+<a href="https://www.flaticon.com/free-icons/artificial-intelligence" title="artificial-intelligence icons">Artificial-intelligence icons created by juicy_fish - Flaticon</a>
