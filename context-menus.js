@@ -3,43 +3,54 @@ import { handleFixGrammar, showAIOverlay } from './utilities.js';
 import { getSettings, callChatAPI } from './api.js';
 
 export function setupContextMenus() {
-  // Create menu items in groups with separators
-  const group1 = [{ action: 'explain', title: 'Explain with AI' }];
-  const group2 = [{ action: 'factCheck', title: 'Fact Check with AI' },
-    { action: 'searchFor', title: 'Search for this with AI' }
-  ];
-  const group3 = [
-    { action: 'translateFr', title: 'Translate to French with AI' },
-    { action: 'translateEn', title: 'Translate to English with AI' },
-    { action: 'spellCheck', title: 'Spellcheck with AI' },
-    { action: 'weiWuTranslate', title: 'WeiWu Translator' },
-    { action: 'fixGrammar', title: 'Fix Grammar with AI' }
-  ];
-
-  function createMenuItemsForGroup(group, separatorId) {
-    for (const { action, title } of group) {
-      chrome.contextMenus.create({
-        id: `${action}AI`,
-        title: title,
-        contexts: ["selection"]
-      });
-    }
-    // Create separator after group
-    chrome.contextMenus.create({
-      id: separatorId,
-      type: 'separator',
-      contexts: ["selection"]
-    });
-  }
-
-  createMenuItemsForGroup(group1, 'separator1');
-  createMenuItemsForGroup(group2, 'separator2');
-  createMenuItemsForGroup(group3, 'separator3');
+  // Create menu items
+  chrome.contextMenus.create({
+    id: 'explainAI',
+    title: 'Explain',
+    contexts: ["selection"]
+  });
+  chrome.contextMenus.create({
+    id: 'factCheckAI',
+    title: 'Fact Check',
+    contexts: ["selection"]
+  });
+  chrome.contextMenus.create({
+    id: 'searchForAI',
+    title: 'Search for this',
+    contexts: ["selection"]
+  });
+  chrome.contextMenus.create({
+    id: 'translateFrAI',
+    title: 'Translate to French',
+    contexts: ["selection"]
+  });
+  chrome.contextMenus.create({
+    id: 'translateEnAI',
+    title: 'Translate to English',
+    contexts: ["selection"]
+  });
+  chrome.contextMenus.create({
+    id: 'spellCheckAI',
+    title: 'Spellcheck',
+    contexts: ["selection"]
+  });
+  chrome.contextMenus.create({
+    id: 'weiWuTranslateAI',
+    title: 'WeiWu Translator',
+    contexts: ["selection"]
+  });
 
   // Create Read Text Aloud option
   chrome.contextMenus.create({
     id: "readSelectedText",
     title: "Read Text Aloud",
+    contexts: ["selection"]
+  });
+
+  // Create Fix Grammar (inplace) option at the end
+  chrome.contextMenus.create({
+    id: "fixGrammarAI",
+    title: "Fix Grammar (inplace)",
     contexts: ["selection"]
   });
 }

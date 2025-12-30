@@ -1,6 +1,6 @@
 # AI Buddy Chrome Extension
 
-**Version:** 1.1.4
+**Version:** 1.1.5
 
 This Chrome extension enhances your browsing experience by integrating powerful AI capabilities directly into your context menu. With this extension, you can easily explain selected text, fact-check information, translate content, fix grammar, and even have text read aloud using advanced text-to-speech.
 
@@ -59,7 +59,7 @@ This Chrome extension enhances your browsing experience by integrating powerful 
 2.  **Right-Click:**
     *   Right-click on the selected text to open the context menu.
 3.  **Choose an Action:**
-    *   **AI Services:** Select "Explain with AI", "Fact Check with AI", "Search for this with AI", "Translate to French with AI", "Translate to English with AI", "Spellcheck with AI", "WeiWu Translator", or "Fix Grammar with AI" to perform the respective action. This will display the AI response in an overlay on the current page (except for "Fix Grammar" which attempts to replace the text in place).
+    *   **AI Services:** Select "Explain", "Fact Check", "Search for this", "Translate to French", "Translate to English", "Spellcheck", "WeiWu Translator", or "Fix Grammar (inplace)" to perform the respective action. This will display the AI response in an overlay on the current page (except for "Fix Grammar (inplace)" which attempts to replace the text in place).
     *   **Read Text Aloud:** Select "Read Text Aloud" to hear the selected text spoken using your browser's text-to-speech.
 
 ## Side Panel
