@@ -127,6 +127,45 @@ export async function showAIOverlay(tabId, text, isLoading = false) {
   });
 }
 
+export async function isSelectionEditable(tabId) {
+  try {
+    const result = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        // First check if there's an active element that's editable
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.isContentEditable ||
+            ((activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') &&
+             !activeElement.readOnly && !activeElement.disabled))) {
+          return true;
+        }
+
+        // Fallback to selection-based detection
+        const selection = globalThis.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const commonAncestor = range.commonAncestorContainer;
+
+          if (commonAncestor.nodeType === Node.ELEMENT_NODE) {
+            if (commonAncestor && (commonAncestor.isContentEditable || (commonAncestor.tagName === 'INPUT' || commonAncestor.tagName === 'TEXTAREA') && !commonAncestor.readOnly && !commonAncestor.disabled)) {
+              return true;
+            }
+          } else if (commonAncestor.nodeType === Node.TEXT_NODE && commonAncestor.parentElement) {
+            if (commonAncestor.parentElement.isContentEditable || (commonAncestor.parentElement.tagName === 'INPUT' || commonAncestor.parentElement.tagName === 'TEXTAREA') && !commonAncestor.parentElement.readOnly && !commonAncestor.parentElement.disabled) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+    });
+    return result[0]?.result || false;
+  } catch (error) {
+    console.error('Error checking if selection is editable:', error);
+    return false;
+  }
+}
+
 export async function handleFixGrammar(tabId, selectionText) {
   try {
     const settings = await chrome.storage.sync.get([
@@ -151,6 +190,9 @@ export async function handleFixGrammar(tabId, selectionText) {
 
     const prompt = `Fix the grammar and syntax of the following text so it is proper, respectful, and understandable by a third party. Keep it in the original language and formatting. Just return the corrected text and nothing else : ${limitedText}`;
 
+    // Check if selection is editable
+    const editable = await isSelectionEditable(tabId);
+
     if (sidepanelProvider === 'openai') {
       const { openaiApiKey, sidepanelModel } = settings;
       if (!openaiApiKey || !sidepanelModel) {
@@ -158,8 +200,10 @@ export async function handleFixGrammar(tabId, selectionText) {
         chrome.runtime.openOptionsPage();
         return;
       }
-      // Show loading overlay
-      showAIOverlay(tabId, '', true);
+      if (!editable) {
+        // Show loading overlay only if not editable
+        showAIOverlay(tabId, '', true);
+      }
       correctedText = await callChatAPI('openai', openaiApiKey, sidepanelModel, prompt);
     } else {
       const { sidepanelOpenrouterApiKey, sidepanelOpenrouterModel } = settings;
@@ -168,52 +212,66 @@ export async function handleFixGrammar(tabId, selectionText) {
         chrome.runtime.openOptionsPage();
         return;
       }
-      // Show loading overlay
-      showAIOverlay(tabId, '', true);
+      if (!editable) {
+        // Show loading overlay only if not editable
+        showAIOverlay(tabId, '', true);
+      }
       correctedText = await callChatAPI('openrouter', sidepanelOpenrouterApiKey, sidepanelOpenrouterModel, prompt);
     }
 
-    // Inject script to detect editable or read-only and replace or update overlay
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (corrected) => {
-        const selection = globalThis.getSelection();
-        let editableElement;
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          const commonAncestor = range.commonAncestorContainer;
+    if (editable) {
+      // Directly replace text without overlay
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (corrected) => {
+          const selection = globalThis.getSelection();
+          let editableElement;
 
-          if (commonAncestor.nodeType === Node.ELEMENT_NODE) {
-            if (commonAncestor && (commonAncestor.isContentEditable || (commonAncestor.tagName === 'INPUT' || commonAncestor.tagName === 'TEXTAREA') && !commonAncestor.readOnly && !commonAncestor.disabled)) {
-              editableElement = commonAncestor;
+          // First try to get editable element from active element
+          const activeElement = document.activeElement;
+          if (activeElement && (activeElement.isContentEditable ||
+              ((activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') &&
+               !activeElement.readOnly && !activeElement.disabled))) {
+            editableElement = activeElement;
+          } else if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const commonAncestor = range.commonAncestorContainer;
+
+            if (commonAncestor.nodeType === Node.ELEMENT_NODE) {
+              if (commonAncestor && (commonAncestor.isContentEditable || (commonAncestor.tagName === 'INPUT' || commonAncestor.tagName === 'TEXTAREA') && !commonAncestor.readOnly && !commonAncestor.disabled)) {
+                editableElement = commonAncestor;
+              }
+            } else if (commonAncestor.nodeType === Node.TEXT_NODE && commonAncestor.parentElement && (commonAncestor.parentElement.isContentEditable || (commonAncestor.parentElement.tagName === 'INPUT' || commonAncestor.parentElement.tagName === 'TEXTAREA') && !commonAncestor.parentElement.readOnly && !commonAncestor.parentElement.disabled)) {
+              editableElement = commonAncestor.parentElement;
             }
-          } else if (commonAncestor.nodeType === Node.TEXT_NODE && commonAncestor.parentElement && (commonAncestor.parentElement.isContentEditable || (commonAncestor.parentElement.tagName === 'INPUT' || commonAncestor.parentElement.tagName === 'TEXTAREA') && !commonAncestor.parentElement.readOnly && !commonAncestor.parentElement.disabled)) {
-            editableElement = commonAncestor.parentElement;
           }
-        }
 
-        if (editableElement) {
-          // Remove loading overlay and replace selected text
-          const overlay = document.querySelector('#ai-overlay');
-          if (overlay) overlay.remove();
-          const start = editableElement.selectionStart;
-          const end = editableElement.selectionEnd;
-          if (typeof start === 'number' && typeof end === 'number') {
-            const value = editableElement.value;
-            editableElement.value = value.slice(0, start) + corrected + value.slice(end);
-            // Set cursor after replaced text
-            editableElement.selectionStart = editableElement.selectionEnd = start + corrected.length;
-          } else {
-            // Fallback: replace selection with document.execCommand
-            document.execCommand('insertText', false, corrected);
+          if (editableElement) {
+            const start = editableElement.selectionStart;
+            const end = editableElement.selectionEnd;
+            if (typeof start === 'number' && typeof end === 'number') {
+              const value = editableElement.value;
+              editableElement.value = value.slice(0, start) + corrected + value.slice(end);
+              // Set cursor after replaced text
+              editableElement.selectionStart = editableElement.selectionEnd = start + corrected.length;
+            } else {
+              // Fallback: replace selection with document.execCommand
+              document.execCommand('insertText', false, corrected);
+            }
           }
-        } else {
-           // Update overlay with corrected text
-           const overlay = document.querySelector('#ai-overlay');
-           if (overlay) {
-             overlay.focus();
-             const container = overlay.querySelector('div');
-             const closeButton = container.querySelector('button');
+        },
+        args: [correctedText]
+      });
+    } else {
+      // Update overlay with corrected text
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (corrected) => {
+          const overlay = document.querySelector('#ai-overlay');
+          if (overlay) {
+            overlay.focus();
+            const container = overlay.querySelector('div');
+            const closeButton = container.querySelector('button');
             // Clear existing content except close button
             for (let child = container.firstChild; child; ) {
               if (child === closeButton) {
@@ -228,12 +286,12 @@ export async function handleFixGrammar(tabId, selectionText) {
             const contentDiv = document.createElement('div');
             contentDiv.style.whiteSpace = 'pre-wrap';
             contentDiv.textContent = corrected;
-             container.append(contentDiv);
+            container.append(contentDiv);
           }
-        }
-      },
-      args: [correctedText]
-    });
+        },
+        args: [correctedText]
+      });
+    }
   } catch (error) {
     console.error('Error fixing grammar:', error);
     chrome.runtime.openOptionsPage();
