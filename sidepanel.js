@@ -9,7 +9,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function addMessage(text, className) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${className}`;
-        messageDiv.textContent = text;
+
+        if (className === 'assistant') {
+            if (typeof marked !== 'undefined') {
+                messageDiv.innerHTML = marked.parse(text);
+            } else {
+                console.error('marked library not loaded');
+                messageDiv.textContent = text;
+            }
+        } else {
+            messageDiv.textContent = text;
+        }
+
         chatMessages.append(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }

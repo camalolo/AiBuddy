@@ -1,6 +1,15 @@
 import { callChatAPI } from './api.js';
 
 export async function showAIOverlay(tabId, text, isLoading = false) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['marked.min.js']
+    });
+  } catch (error) {
+    console.warn('Failed to inject marked library:', error);
+  }
+
   await chrome.scripting.executeScript({
     target: { tabId },
     func: (responseText, isLoading) => {
@@ -31,10 +40,10 @@ export async function showAIOverlay(tabId, text, isLoading = false) {
         container.style.color = '#fff';
         container.style.padding = '20px';
         container.style.borderRadius = '8px';
-        container.style.width = '600px';
-        container.style.height = '400px';
-        container.style.maxWidth = '90%';
-        container.style.maxHeight = '90%';
+        container.style.width = '90vw';
+        container.style.height = '90vh';
+        container.style.maxWidth = '90vw';
+        container.style.maxHeight = '90vh';
         container.style.overflow = 'auto';
         container.style.position = 'relative';
         container.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
@@ -92,14 +101,14 @@ export async function showAIOverlay(tabId, text, isLoading = false) {
 
        // Clear existing content except close button
             for (let child = container.firstChild; child; ) {
-        if (child === closeButton) {
-          break;
-        } else {
-          const next = child.nextSibling;
-          child.remove();
-          child = next;
-        }
-      }
+         if (child === closeButton) {
+           break;
+         } else {
+           const next = child.nextSibling;
+           child.remove();
+           child = next;
+         }
+       }
 
       // Add content
       contentDiv = document.createElement('div');
@@ -117,8 +126,89 @@ export async function showAIOverlay(tabId, text, isLoading = false) {
           </style>
         `;
       } else {
-        contentDiv.style.whiteSpace = 'pre-wrap';
-        contentDiv.textContent = responseText;
+        if (typeof marked !== 'undefined') {
+          contentDiv.innerHTML = marked.parse(responseText);
+          // Add markdown styles
+          const style = document.createElement('style');
+          style.textContent = `
+            #ai-overlay strong {
+              font-weight: 700;
+            }
+            #ai-overlay em {
+              font-style: italic;
+            }
+            #ai-overlay blockquote {
+              border-left: 4px solid rgba(255, 255, 255, 0.5);
+              padding-left: 12px;
+              margin: 12px 0;
+              font-style: italic;
+              opacity: 0.9;
+            }
+            #ai-overlay code {
+              background: rgba(0, 0, 0, 0.3);
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-family: 'Courier New', monospace;
+              font-size: 0.9em;
+            }
+            #ai-overlay pre {
+              background: rgba(0, 0, 0, 0.4);
+              padding: 12px;
+              border-radius: 8px;
+              overflow-x: auto;
+              margin: 12px 0;
+            }
+            #ai-overlay pre code {
+              background: none;
+              padding: 0;
+            }
+            #ai-overlay h1, #ai-overlay h2, #ai-overlay h3, #ai-overlay h4, #ai-overlay h5, #ai-overlay h6 {
+              margin: 12px 0 8px 0;
+              font-weight: 600;
+            }
+            #ai-overlay h1 { font-size: 1.5em; }
+            #ai-overlay h2 { font-size: 1.3em; }
+            #ai-overlay h3 { font-size: 1.1em; }
+            #ai-overlay h4 { font-size: 1em; }
+            #ai-overlay p {
+              margin: 8px 0;
+            }
+            #ai-overlay ul, #ai-overlay ol {
+              margin: 8px 0;
+              padding-left: 20px;
+            }
+            #ai-overlay li {
+              margin: 4px 0;
+            }
+            #ai-overlay a {
+              color: #8ab4f8;
+              text-decoration: underline;
+            }
+            #ai-overlay table {
+              border-collapse: collapse;
+              width: 100%;
+              margin: 12px 0;
+            }
+            #ai-overlay th, #ai-overlay td {
+              border: 1px solid rgba(255, 255, 255, 0.3);
+              padding: 8px 12px;
+              text-align: left;
+            }
+            #ai-overlay th {
+              background: rgba(0, 0, 0, 0.2);
+              font-weight: 600;
+            }
+            #ai-overlay hr {
+              border: none;
+              border-top: 1px solid rgba(255, 255, 255, 0.3);
+              margin: 16px 0;
+            }
+          `;
+          overlay.appendChild(style);
+        } else {
+          contentDiv.style.whiteSpace = 'pre-wrap';
+          contentDiv.textContent = responseText;
+        }
       }
 
       container.append(contentDiv);
@@ -168,6 +258,12 @@ export async function isSelectionEditable(tabId) {
 
 export async function handleFixGrammar(tabId, selectionText) {
   try {
+    // Set cursor to wait before starting
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => { document.body.style.cursor = 'wait'; }
+    });
+
     const settings = await chrome.storage.sync.get([
       'sidepanelProvider',
       'openaiApiKey',
@@ -250,10 +346,8 @@ export async function handleFixGrammar(tabId, selectionText) {
             const start = editableElement.selectionStart;
             const end = editableElement.selectionEnd;
             if (typeof start === 'number' && typeof end === 'number') {
-              const value = editableElement.value;
-              editableElement.value = value.slice(0, start) + corrected + value.slice(end);
-              // Set cursor after replaced text
-              editableElement.selectionStart = editableElement.selectionEnd = start + corrected.length;
+              // Use setRangeText to preserve undo functionality
+              editableElement.setRangeText(corrected, start, end, 'select');
             } else {
               // Fallback: replace selection with document.execCommand
               document.execCommand('insertText', false, corrected);
@@ -263,7 +357,16 @@ export async function handleFixGrammar(tabId, selectionText) {
         args: [correctedText]
       });
     } else {
-      // Update overlay with corrected text
+      // Inject marked library and update overlay with corrected text
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['marked.min.js']
+        });
+      } catch (error) {
+        console.warn('Failed to inject marked library:', error);
+      }
+
       await chrome.scripting.executeScript({
         target: { tabId },
         func: (corrected) => {
@@ -284,8 +387,92 @@ export async function handleFixGrammar(tabId, selectionText) {
             }
             // Add response content
             const contentDiv = document.createElement('div');
-            contentDiv.style.whiteSpace = 'pre-wrap';
-            contentDiv.textContent = corrected;
+            if (typeof marked !== 'undefined') {
+              contentDiv.innerHTML = marked.parse(corrected);
+              // Add markdown styles if not already present
+              if (!overlay.querySelector('style[data-markdown-styles]')) {
+                const style = document.createElement('style');
+                style.setAttribute('data-markdown-styles', 'true');
+                style.textContent = `
+                  #ai-overlay strong {
+                    font-weight: 700;
+                  }
+                  #ai-overlay em {
+                    font-style: italic;
+                  }
+                  #ai-overlay blockquote {
+                    border-left: 4px solid rgba(255, 255, 255, 0.5);
+                    padding-left: 12px;
+                    margin: 12px 0;
+                    font-style: italic;
+                    opacity: 0.9;
+                  }
+                  #ai-overlay code {
+                    background: rgba(0, 0, 0, 0.3);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 0.9em;
+                  }
+                  #ai-overlay pre {
+                    background: rgba(0, 0, 0, 0.4);
+                    padding: 12px;
+                    border-radius: 8px;
+                    overflow-x: auto;
+                    margin: 12px 0;
+                  }
+                  #ai-overlay pre code {
+                    background: none;
+                    padding: 0;
+                  }
+                  #ai-overlay h1, #ai-overlay h2, #ai-overlay h3, #ai-overlay h4, #ai-overlay h5, #ai-overlay h6 {
+                    margin: 12px 0 8px 0;
+                    font-weight: 600;
+                  }
+                  #ai-overlay h1 { font-size: 1.5em; }
+                  #ai-overlay h2 { font-size: 1.3em; }
+                  #ai-overlay h3 { font-size: 1.1em; }
+                  #ai-overlay h4 { font-size: 1em; }
+                  #ai-overlay p {
+                    margin: 8px 0;
+                  }
+                  #ai-overlay ul, #ai-overlay ol {
+                    margin: 8px 0;
+                    padding-left: 20px;
+                  }
+                  #ai-overlay li {
+                    margin: 4px 0;
+                  }
+                  #ai-overlay a {
+                    color: #8ab4f8;
+                    text-decoration: underline;
+                  }
+                  #ai-overlay table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    margin: 12px 0;
+                  }
+                  #ai-overlay th, #ai-overlay td {
+                    border: 1px solid rgba(255, 255, 255, 0.3);
+                    padding: 8px 12px;
+                    text-align: left;
+                  }
+                  #ai-overlay th {
+                    background: rgba(0, 0, 0, 0.2);
+                    font-weight: 600;
+                  }
+                  #ai-overlay hr {
+                    border: none;
+                    border-top: 1px solid rgba(255, 255, 255, 0.3);
+                    margin: 16px 0;
+                  }
+                `;
+                overlay.appendChild(style);
+              }
+            } else {
+              contentDiv.style.whiteSpace = 'pre-wrap';
+              contentDiv.textContent = corrected;
+            }
             container.append(contentDiv);
           }
         },
@@ -295,5 +482,11 @@ export async function handleFixGrammar(tabId, selectionText) {
   } catch (error) {
     console.error('Error fixing grammar:', error);
     chrome.runtime.openOptionsPage();
+  } finally {
+    // Always reset cursor to default
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => { document.body.style.cursor = 'default'; }
+    });
   }
 }
