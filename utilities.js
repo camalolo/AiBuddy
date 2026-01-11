@@ -110,21 +110,43 @@ export async function showAIOverlay(tabId, text, isLoading = false) {
          }
        }
 
-      // Add content
-      contentDiv = document.createElement('div');
-      if (isLoading) {
-        contentDiv.innerHTML = `
-          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-            <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <div style="margin-top: 10px; color: #fff;">Loading...</div>
-          </div>
-          <style>
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          </style>
-        `;
+       // Add content
+       contentDiv = document.createElement('div');
+       if (isLoading) {
+         const spinner = document.createElement('div');
+         spinner.style.position = 'absolute';
+         spinner.style.top = '50%';
+         spinner.style.left = '50%';
+         spinner.style.marginTop = '-40px';
+         spinner.style.marginLeft = '-40px';
+         spinner.style.display = 'flex';
+         spinner.style.flexDirection = 'column';
+         spinner.style.alignItems = 'center';
+
+         const spinnerCircle = document.createElement('div');
+         spinnerCircle.style.display = 'inline-block';
+         spinnerCircle.style.width = '40px';
+         spinnerCircle.style.height = '40px';
+         spinnerCircle.style.border = '4px solid #f3f3f3';
+         spinnerCircle.style.borderTop = '4px solid #3498db';
+         spinnerCircle.style.borderRadius = '50%';
+
+         const loadingText = document.createElement('div');
+         loadingText.textContent = 'Loading...';
+         loadingText.style.marginTop = '10px';
+         loadingText.style.color = '#fff';
+
+          spinner.append(spinnerCircle, loadingText);
+          contentDiv.append(spinner);
+
+          // Animate spinner with JavaScript
+          let rotation = 0;
+          const animateSpinner = () => {
+            rotation += 6;
+            spinnerCircle.style.transform = `rotate(${rotation}deg)`;
+            requestAnimationFrame(animateSpinner);
+          };
+          animateSpinner();
       } else {
         if (typeof marked !== 'undefined') {
           contentDiv.innerHTML = marked.parse(responseText);
