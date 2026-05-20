@@ -1,11 +1,24 @@
 export const providerConfigs = {
   openai: {
     url: 'https://api.openai.com/v1/chat/completions',
-    errorPrefix: 'OpenAI API error:'
+    errorPrefix: 'OpenAI API error:',
+    apiKeyField: 'openaiApiKey',
+    modelField: 'sidepanelModel',
+    name: 'OpenAI'
   },
   openrouter: {
     url: 'https://openrouter.ai/api/v1/chat/completions',
-    errorPrefix: 'OpenRouter API error:'
+    errorPrefix: 'OpenRouter API error:',
+    apiKeyField: 'sidepanelOpenrouterApiKey',
+    modelField: 'sidepanelOpenrouterModel',
+    name: 'OpenRouter'
+  },
+  deepseek: {
+    url: 'https://api.deepseek.com/v1/chat/completions',
+    errorPrefix: 'DeepSeek API error:',
+    apiKeyField: 'sidepanelDeepseekApiKey',
+    modelField: 'sidepanelDeepseekModel',
+    name: 'DeepSeek'
   }
 };
 
@@ -15,7 +28,9 @@ export async function getSettings() {
     'openaiApiKey',
     'sidepanelModel',
     'sidepanelOpenrouterApiKey',
-    'sidepanelOpenrouterModel'
+    'sidepanelOpenrouterModel',
+    'sidepanelDeepseekApiKey',
+    'sidepanelDeepseekModel'
   ]);
 }
 
@@ -25,6 +40,8 @@ export async function callChatAPI(provider, apiKey, model, prompt) {
     config = providerConfigs.openai;
   } else if (provider === 'openrouter') {
     config = providerConfigs.openrouter;
+  } else if (provider === 'deepseek') {
+    config = providerConfigs.deepseek;
   } else {
     throw new Error(`Unsupported provider: ${provider}`);
   }

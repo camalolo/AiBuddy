@@ -41,14 +41,27 @@ loadBrowserVoices();
 function switchSidepanelProvider(provider) {
   const openaiSettings = document.querySelector('#sidepanel-openai-settings');
   const openrouterSettings = document.querySelector('#sidepanel-openrouter-settings');
+  const deepseekSettings = document.querySelector('#sidepanel-deepseek-settings');
+  openaiSettings.style.display = 'none';
+  openrouterSettings.style.display = 'none';
+  deepseekSettings.style.display = 'none';
+
   if (provider === 'openai') {
     openaiSettings.style.display = 'block';
-    openrouterSettings.style.display = 'none';
-  } else {
-    openaiSettings.style.display = 'none';
+  } else if (provider === 'openrouter') {
     openrouterSettings.style.display = 'block';
+  } else if (provider === 'deepseek') {
+    deepseekSettings.style.display = 'block';
   }
-  const apiKey = provider === 'openai' ? document.querySelector('#apiKey').value : document.querySelector('#sidepanelOpenrouterApiKey').value;
+
+  let apiKey = '';
+  if (provider === 'openai') {
+    apiKey = document.querySelector('#apiKey').value;
+  } else if (provider === 'openrouter') {
+    apiKey = document.querySelector('#sidepanelOpenrouterApiKey').value;
+  } else if (provider === 'deepseek') {
+    apiKey = document.querySelector('#sidepanelDeepseekApiKey').value;
+  }
    if (apiKey) {
      const freeOnly = provider === 'openrouter' ? document.querySelector('#openrouterFreeOnly').checked : false;
      fetchAvailableModels(provider, apiKey, freeOnly);
@@ -76,12 +89,15 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
   if (provider === 'openai') {
     modelSelect = document.querySelector('#sidepanelModel');
     modelStatus = document.querySelector('#sidepanelModelStatus');
-  } else {
+  } else if (provider === 'openrouter') {
     modelSelect = document.querySelector('#sidepanelOpenrouterModel');
     modelStatus = document.querySelector('#sidepanelOpenrouterModelStatus');
+  } else if (provider === 'deepseek') {
+    modelSelect = document.querySelector('#sidepanelDeepseekModel');
+    modelStatus = document.querySelector('#sidepanelDeepseekModelStatus');
   }
 
-  if ((provider === 'openai' || provider === 'openrouter') && !apiKey) {
+  if ((provider === 'openai' || provider === 'openrouter' || provider === 'deepseek') && !apiKey) {
     modelSelect.innerHTML = '<option value="">Enter API key first</option>';
     modelStatus.textContent = '';
     return false;
@@ -97,6 +113,9 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
       headers['Authorization'] = `Bearer ${apiKey}`;
     } else if (provider === 'openrouter') {
       url = 'https://openrouter.ai/api/v1/models';
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    } else if (provider === 'deepseek') {
+      url = 'https://api.deepseek.com/v1/models';
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
@@ -116,6 +135,11 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
     } else if (provider === 'openrouter') {
        models = data.data
          .filter(model => freeOnly ? model.id.includes(':free') : true)
+         .toSorted((a, b) => a.id.localeCompare(b.id))
+         .map(model => model.id);
+     } else if (provider === 'deepseek') {
+       models = data.data
+         .filter(model => model.id.startsWith('deepseek-'))
          .toSorted((a, b) => a.id.localeCompare(b.id))
          .map(model => model.id);
      }
@@ -210,6 +234,18 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
       } else {
         validationErrors.push('Please select an OpenRouter model for sidepanel.');
       }
+    } else if (sidepanelProvider === 'deepseek') {
+      const deepseekApiKey = document.querySelector('#sidepanelDeepseekApiKey').value;
+      const model = document.querySelector('#sidepanelDeepseekModel').value;
+      if (!deepseekApiKey) {
+        validationErrors.push('Please enter a DeepSeek API key for sidepanel.');
+      }
+      if (model) {
+        settings.sidepanelDeepseekApiKey = deepseekApiKey;
+        settings.sidepanelDeepseekModel = model;
+      } else {
+        validationErrors.push('Please select a DeepSeek model for sidepanel.');
+      }
     }
 
 
@@ -251,7 +287,7 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
       }
 
       settings.sidepanelModel = model;
-    } else {
+    } else if (sidepanelProvider === 'openrouter') {
       const sidepanelApiKey = document.querySelector('#sidepanelOpenrouterApiKey').value;
       const model = document.querySelector('#sidepanelOpenrouterModel').value;
 
@@ -290,6 +326,45 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
 
       settings.sidepanelOpenrouterApiKey = sidepanelApiKey;
       settings.sidepanelOpenrouterModel = model;
+    } else if (sidepanelProvider === 'deepseek') {
+      const sidepanelApiKey = document.querySelector('#sidepanelDeepseekApiKey').value;
+      const model = document.querySelector('#sidepanelDeepseekModel').value;
+
+      if (!sidepanelApiKey) {
+        status.textContent = 'Please enter a DeepSeek API key.';
+        status.style.color = '#dc2626';
+        setTimeout(() => {
+          status.textContent = '';
+          status.style.color = '';
+        }, 3000);
+        return;
+      }
+
+      if (!model) {
+        status.textContent = 'Please select a DeepSeek model.';
+        status.style.color = '#dc2626';
+        setTimeout(() => {
+          status.textContent = '';
+          status.style.color = '';
+        }, 3000);
+        return;
+      }
+
+      // Validate API key by performing a test completion
+      status.textContent = 'Validating API key...';
+      const validation = await validateAPI('deepseek', sidepanelApiKey, model);
+      if (!validation.valid) {
+        status.textContent = 'API key validation failed: ' + (validation.error || 'Unknown error');
+        status.style.color = '#dc2626';
+        setTimeout(() => {
+          status.textContent = '';
+          status.style.color = '';
+        }, 5000);
+        return;
+      }
+
+      settings.sidepanelDeepseekApiKey = sidepanelApiKey;
+      settings.sidepanelDeepseekModel = model;
     }
 
    chrome.storage.sync.set(settings, () => {
@@ -314,7 +389,9 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
          sidepanelModel: '', // default value
          sidepanelOpenrouterApiKey: '', // default value
          sidepanelOpenrouterModel: '', // default value
-         sidepanelOpenrouterFreeOnly: false // default value
+         sidepanelOpenrouterFreeOnly: false, // default value
+         sidepanelDeepseekApiKey: '', // default value
+         sidepanelDeepseekModel: '' // default value
        },
       async (items) => {
         document.querySelector('#apiKey').value = items.openaiApiKey;
@@ -349,7 +426,7 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
            await fetchAvailableModels('openai', items.openaiApiKey, true);
            document.querySelector('#sidepanelModel').value = items.sidepanelModel;
          }
-        } else {
+        } else if (items.sidepanelProvider === 'openrouter') {
           document.querySelector('#sidepanelOpenrouterApiKey').value = items.sidepanelOpenrouterApiKey;
           document.querySelector('#sidepanelOpenrouterModel').value = items.sidepanelOpenrouterModel;
           document.querySelector('#openrouterFreeOnly').checked = items.sidepanelOpenrouterFreeOnly;
@@ -357,8 +434,16 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
           if (items.sidepanelOpenrouterApiKey) {
             await fetchAvailableModels('openrouter', items.sidepanelOpenrouterApiKey, items.sidepanelOpenrouterFreeOnly);
             document.querySelector('#sidepanelOpenrouterModel').value = items.sidepanelOpenrouterModel;
-             }
-           }
+          }
+        } else if (items.sidepanelProvider === 'deepseek') {
+          document.querySelector('#sidepanelDeepseekApiKey').value = items.sidepanelDeepseekApiKey;
+          document.querySelector('#sidepanelDeepseekModel').value = items.sidepanelDeepseekModel;
+          // Fetch models if API key exists
+          if (items.sidepanelDeepseekApiKey) {
+            await fetchAvailableModels('deepseek', items.sidepanelDeepseekApiKey, false);
+            document.querySelector('#sidepanelDeepseekModel').value = items.sidepanelDeepseekModel;
+          }
+        }
         updateOpenAISettingsVisibility();
 
         // Remove old grammar-specific keys to clean up
@@ -417,6 +502,17 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
        if (currentSelection && options.includes(currentSelection)) {
          modelSelect.value = currentSelection;
        }
+     }
+    });
+
+    // Fetch models when DeepSeek API key changes
+    document.querySelector('#sidepanelDeepseekApiKey').addEventListener('input', async (event) => {
+     const apiKey = event.target.value.trim();
+     if (apiKey) {
+       await fetchAvailableModels('deepseek', apiKey, false);
+     } else {
+       document.querySelector('#sidepanelDeepseekModel').innerHTML = '<option value="">Enter API key first</option>';
+       document.querySelector('#sidepanelDeepseekModelStatus').textContent = '';
      }
     });
 

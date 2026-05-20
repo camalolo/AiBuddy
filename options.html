@@ -65,6 +65,7 @@
       <select id="sidepanelProvider">
         <option value="openai">OpenAI</option>
         <option value="openrouter">OpenRouter</option>
+        <option value="deepseek">DeepSeek</option>
       </select>
     </div>
   <div id="sidepanel-openai-settings" class="provider-settings">
@@ -94,6 +95,19 @@
       <div id="sidepanelOpenrouterModelStatus" style="margin-top: 4px; font-size: 0.9em;"></div>
     </div>
    </div>
+  <div id="sidepanel-deepseek-settings" class="provider-settings" style="display: none;">
+    <div class="form-group">
+      <label for="sidepanelDeepseekApiKey">DeepSeek API Key:</label>
+      <input type="text" id="sidepanelDeepseekApiKey" placeholder="Enter your DeepSeek API key">
+    </div>
+    <div class="form-group">
+      <label for="sidepanelDeepseekModel">DeepSeek Model:</label>
+      <select id="sidepanelDeepseekModel">
+        <option value="">Select a model...</option>
+      </select>
+      <div id="sidepanelDeepseekModelStatus" style="margin-top: 4px; font-size: 0.9em;"></div>
+    </div>
+  </div>
 
 
 

@@ -1,4 +1,4 @@
-import { callChatAPI, getSettings } from './api.js';
+import { callChatAPI, getSettings, providerConfigs } from './api.js';
 import { tools, executeTool } from './tools.js';
 
 const SYSTEM_MESSAGE = {
@@ -30,95 +30,51 @@ export async function handleChat(messages, sender) {
   const settings = await getSettings();
   const { sidepanelProvider } = settings;
 
-  if (sidepanelProvider === 'openai') {
-    const { openaiApiKey, sidepanelModel } = settings;
-    if (!openaiApiKey || !sidepanelModel) throw new Error('OpenAI API key or model not set. Please configure in options.');
+  const config = providerConfigs[sidepanelProvider];
+  if (!config) throw new Error('No AI provider configured. Please configure in options.');
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const apiKey = settings[config.apiKeyField];
+  const model = settings[config.modelField];
+  if (!apiKey || !model) throw new Error(`${config.name} API key or model not set. Please configure in options.`);
+
+  const apiHeaders = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json'
+  };
+
+  const response = await fetch(config.url, {
+    method: 'POST',
+    headers: apiHeaders,
+    body: JSON.stringify({
+      model: model,
+      messages: [SYSTEM_MESSAGE, ...messages],
+      tools: tools,
+      tool_choice: 'auto'
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || `${config.name} API error`);
+
+  const assistantMessage = data.choices[0].message;
+  if (assistantMessage.tool_calls) {
+    const toolResults = await Promise.all(assistantMessage.tool_calls.map(call => executeTool(call, sender)));
+    // Follow-up call with tool results
+    const followUpResponse = await fetch(config.url, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json'
-      },
+      headers: apiHeaders,
       body: JSON.stringify({
-        model: sidepanelModel,
-        messages: [SYSTEM_MESSAGE, ...messages],
-        tools: tools,
-        tool_choice: 'auto'
+        model: model,
+        messages: [
+          ...messages,
+          assistantMessage,
+          ...toolResults.map(r => ({ role: 'tool', tool_call_id: r.tool_call_id, content: r.content }))
+        ]
       })
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'OpenAI API error');
-
-    const assistantMessage = data.choices[0].message;
-    if (assistantMessage.tool_calls) {
-      const toolResults = await Promise.all(assistantMessage.tool_calls.map(call => executeTool(call, sender)));
-      // Follow-up call with tool results
-      const followUpResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: sidepanelModel,
-          messages: [
-            ...messages,
-            assistantMessage,
-            ...toolResults.map(r => ({ role: 'tool', tool_call_id: r.tool_call_id, content: r.content }))
-          ]
-        })
-      });
-      const followUpData = await followUpResponse.json();
-      if (!followUpResponse.ok) throw new Error(followUpData.error?.message || 'OpenAI API error');
-      return followUpData.choices[0].message.content;
-    } else {
-      return assistantMessage.content;
-    }
+    const followUpData = await followUpResponse.json();
+    if (!followUpResponse.ok) throw new Error(followUpData.error?.message || `${config.name} API error`);
+    return followUpData.choices[0].message.content;
   } else {
-    const { sidepanelOpenrouterApiKey, sidepanelOpenrouterModel } = settings;
-    if (!sidepanelOpenrouterApiKey || !sidepanelOpenrouterModel) throw new Error('OpenRouter API key or model not set. Please configure in options.');
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${sidepanelOpenrouterApiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: sidepanelOpenrouterModel,
-        messages: [SYSTEM_MESSAGE, ...messages],
-        tools: tools,
-        tool_choice: 'auto'
-      })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'OpenRouter API error');
-
-    const assistantMessage = data.choices[0].message;
-    if (assistantMessage.tool_calls) {
-      const toolResults = await Promise.all(assistantMessage.tool_calls.map(call => executeTool(call, sender)));
-      // Follow-up call with tool results
-      const followUpResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sidepanelOpenrouterApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: sidepanelOpenrouterModel,
-          messages: [
-            ...messages,
-            assistantMessage,
-            ...toolResults.map(r => ({ role: 'tool', tool_call_id: r.tool_call_id, content: r.content }))
-          ]
-        })
-      });
-      const followUpData = await followUpResponse.json();
-      if (!followUpResponse.ok) throw new Error(followUpData.error?.message || 'OpenRouter API error');
-      return followUpData.choices[0].message.content;
-    } else {
-      return assistantMessage.content;
-    }
+    return assistantMessage.content;
   }
 }

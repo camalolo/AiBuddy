@@ -1,6 +1,6 @@
 import { debouncedTTS, showLoadingIndicator, showPlayingIndicator } from './tts.js';
 import { handleFixGrammar, showAIOverlay } from './utilities.js';
-import { getSettings, callChatAPI } from './api.js';
+import { getSettings, callChatAPI, providerConfigs } from './api.js';
 
 export function setupContextMenus() {
   // Create menu items
@@ -143,12 +143,10 @@ export async function handleMenuClick(info, tab) {
       }
 
       let apiKey, model;
-      if (sidepanelProvider === 'openai') {
-        apiKey = settings.openaiApiKey;
-        model = settings.sidepanelModel;
-      } else if (sidepanelProvider === 'openrouter') {
-        apiKey = settings.sidepanelOpenrouterApiKey;
-        model = settings.sidepanelOpenrouterModel;
+      const providerConfig = providerConfigs[sidepanelProvider];
+      if (providerConfig) {
+        apiKey = settings[providerConfig.apiKeyField];
+        model = settings[providerConfig.modelField];
       }
 
       if (!apiKey || !model) {
