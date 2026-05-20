@@ -198,7 +198,9 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
     let settings = {
        openaiApiKey: apiKey,
        browserVoice: browserVoice,
-       sidepanelProvider
+       sidepanelProvider,
+       tavilyApiKey: document.querySelector('#tavilyApiKey').value.trim(),
+       tinyfishApiKey: document.querySelector('#tinyfishApiKey').value.trim()
      };
 
      // Add OpenRouter free only setting if OpenRouter is selected
@@ -391,7 +393,9 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
          sidepanelOpenrouterModel: '', // default value
          sidepanelOpenrouterFreeOnly: false, // default value
          sidepanelDeepseekApiKey: '', // default value
-         sidepanelDeepseekModel: '' // default value
+         sidepanelDeepseekModel: '', // default value
+         tavilyApiKey: '', // default value
+         tinyfishApiKey: '' // default value
        },
       async (items) => {
         document.querySelector('#apiKey').value = items.openaiApiKey;
@@ -445,6 +449,10 @@ async function fetchAvailableModels(provider, apiKey, freeOnly = false) {
           }
         }
         updateOpenAISettingsVisibility();
+
+        // Restore search API keys
+        document.querySelector('#tavilyApiKey').value = items.tavilyApiKey;
+        document.querySelector('#tinyfishApiKey').value = items.tinyfishApiKey;
 
         // Remove old grammar-specific keys to clean up
         chrome.storage.sync.remove([

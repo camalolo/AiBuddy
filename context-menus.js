@@ -1,6 +1,6 @@
 import { debouncedTTS, showLoadingIndicator, showPlayingIndicator } from './tts.js';
 import { handleFixGrammar, showAIOverlay } from './utilities.js';
-import { getSettings, callChatAPI, providerConfigs } from './api.js';
+import { getSettings, callChatAPI, providerConfigs, tavilySearch, tinyfishSearch } from './api.js';
 
 export function setupContextMenus() {
   // Create menu items
@@ -165,12 +165,36 @@ export async function handleMenuClick(info, tab) {
 
       if (isFixGrammar) {
         handleFixGrammar(tab.id, info.selectionText);
+      } else if (isSearchFor) {
+        // Search via Tavily (preferred) or TinyFish (fallback), then synthesize with LLM
+        showAIOverlay(tab.id, '', true);
+
+        let searchResults = '';
+        if (settings.tavilyApiKey) {
+          try {
+            searchResults = await tavilySearch(info.selectionText, settings.tavilyApiKey);
+          } catch (e) {
+            console.error('Tavily search failed:', e);
+          }
+        }
+        if (!searchResults && settings.tinyfishApiKey) {
+          try {
+            searchResults = await tinyfishSearch(info.selectionText, settings.tinyfishApiKey);
+          } catch (e) {
+            console.error('TinyFish search failed:', e);
+          }
+        }
+
+        const prompt = searchResults
+          ? `Based on these web search results, provide a comprehensive summary about: "${info.selectionText}"\n\nSearch results:\n${searchResults}`
+          : `Search for the following term and summarize information you find: ${info.selectionText}`;
+
+        const response = await callChatAPI(sidepanelProvider, apiKey, model, prompt);
+        showAIOverlay(tab.id, response, false);
       } else {
         let prompt;
         if (isFactCheck) {
           prompt = `Fact check for truthfulness the following text: ${info.selectionText}`;
-        } else if (isSearchFor) {
-          prompt = `Search for the following term and summarize information you find : ${info.selectionText}`;
         } else if (isTranslateFr) {
           prompt = `Translate the following text to French: ${info.selectionText}`;
         } else if (isTranslateEn) {
