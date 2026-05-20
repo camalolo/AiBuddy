@@ -6,6 +6,7 @@ Manifest V3 extension. Context menu actions (explain, fact-check, search, transl
 
 - **Lint:** `npm run lint` — ESLint with `unicorn` + `security` plugins; config lives in `release/config/eslint.config.mjs`
 - **Pack:** `npm run pack` — builds `.zip` + `.crx` into `dist/` via `release/scripts/pack.mjs` (requires `../Chrome-Extension-Keys/key.pem` for CRX signing)
+- **Publish:** `npm run publish` — runs `bash release/scripts/tag_release.sh` (tags, builds, creates GitHub Release)
 - **Install for dev:** Load unpacked from repo root in `chrome://extensions` with Developer Mode on
 - **No tests** — `npm test` is a placeholder
 
