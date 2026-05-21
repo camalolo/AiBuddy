@@ -32,7 +32,7 @@
     }
     .aibuddy-toolbar-btn:hover { background: #1557b0; }
     .aibuddy-toolbar-btn:disabled { opacity: 0.6; cursor: wait; }
-    .aibuddy-btn-group { display: inline-flex; align-items: center; margin-left: 8px; }
+    .aibuddy-btn-group { display: inline-flex; align-items: center; margin-left: 8px; position: relative; z-index: 1; }
   `;
 
   const MODAL_STYLES = `
@@ -115,7 +115,7 @@ Keep the summary brief and well-structured. Use markdown formatting.`,
 - Context and background of the conversation
 - Key points and arguments made by each participant
 - Technical terms or jargon explained
-- Implications and next steps (if any)
+- Implications and personalized next steps for {userName} ({currentUser}), the account owner
 Use markdown formatting for clarity.`,
 
     draftReply: `You are an AI assistant integrated into Gmail. Based on the following email thread, draft a tentative reply email. The reply should:
@@ -123,6 +123,7 @@ Use markdown formatting for clarity.`,
 - Address the key points from the latest email
 - Be concise but complete
 - Include a subject line if replying to a changed topic
+- Match the tone and writing style of {userName}'s previous messages in the thread if any are present
 - Write from the perspective of {userName} ({currentUser}), the owner of this email account
 Write ONLY the email body text, ready to send. Do not include "Subject:" unless the subject changed. Do not add introductory meta-text like "Here's a draft reply:" — just write the email itself.`
   };
@@ -392,10 +393,8 @@ Write ONLY the email body text, ready to send. Do not include "Subject:" unless 
       const myAccount = accounts.find(a => a.email === currentUser);
       const userName = (myAccount && myAccount.name) || '';
       let prompt = PROMPTS[actionType];
-      if (isReply) {
-        prompt = prompt.replace('{currentUser}', currentUser);
-        prompt = prompt.replace('{userName}', userName || currentUser);
-      }
+      prompt = prompt.replace('{currentUser}', currentUser);
+      prompt = prompt.replace('{userName}', userName || currentUser);
       const reply = await sendToBackground('gmail_ai_action', {
         prompt: prompt,
         threadContent: content,
@@ -511,12 +510,14 @@ Write ONLY the email body text, ready to send. Do not include "Subject:" unless 
     // Avoid duplicate injection
     if (document.querySelector('#aibuddy-btn-group')) return;
 
-    // Find Gmail's toolbar — try multiple selectors for different Gmail layouts
-    const toolbar = document.querySelector('.aDh .G-Ni, .aqL .G-Ni, [gh="mtb"] .G-Ni, .iH .G-Ni, .G-atb .G-Ni');
-    if (!toolbar) return;
+    // Find Gmail's toolbar button container
+    // Each .G-Ni is a button wrapper; find the parent that contains them all
+    const firstBtn = document.querySelector('.aDh .G-Ni, .aqL .G-Ni, [gh="mtb"] .G-Ni, .iH .G-Ni, .G-atb .G-Ni');
+    if (!firstBtn) return;
+    const btnContainer = firstBtn.parentElement;
 
     const group = document.createElement('div');
-    group.className = 'aibuddy-btn-group';
+    group.className = 'aibuddy-btn-group G-Ni J-J5-Ji';
     group.id = 'aibuddy-btn-group';
 
     const buttons = [
@@ -533,7 +534,7 @@ Write ONLY the email body text, ready to send. Do not include "Subject:" unless 
       group.append(button);
     }
 
-    toolbar.insertBefore(group, toolbar.firstChild);
+    btnContainer.append(group);
   }
 
   // ------------------------------------------------------------------ //
