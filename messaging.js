@@ -78,3 +78,24 @@ export async function handleChat(messages, sender) {
     return assistantMessage.content;
   }
 }
+
+/**
+ * Handle Gmail AI requests from the content script relay.
+ * Takes a prompt + thread content, calls the configured LLM, returns the reply.
+ */
+export async function handleGmailAiMessage(gmailAction, payload) {
+  const settings = await getSettings();
+  const { sidepanelProvider } = settings;
+
+  const config = providerConfigs[sidepanelProvider];
+  if (!config) throw new Error('No AI provider configured. Please configure in extension options.');
+
+  const apiKey = settings[config.apiKeyField];
+  const model = settings[config.modelField];
+  if (!apiKey || !model) throw new Error(`${config.name} API key or model not set. Please configure in extension options.`);
+
+  const { prompt, threadContent } = payload;
+  const fullPrompt = `${prompt}\n\n---\n\n${threadContent}`;
+
+  return await callChatAPI(sidepanelProvider, apiKey, model, fullPrompt);
+}

@@ -30,17 +30,30 @@ background.js          <- service worker entry; wires up context menus + message
   |     |- tts.js          <- TTS: debounced playback, injects CSS indicators into pages
   |     |- utilities.js    <- showAIOverlay (markdown overlay), handleFixGrammar (in-place or overlay)
   |     |- api.js          <- tavilySearch(), tinyfishSearch() for web search
-  |- messaging.js      <- chrome.runtime.onMessage handler for 'chat' and 'validate_api'
+  |- messaging.js      <- chrome.runtime.onMessage handler for 'chat', 'validate_api', 'gmail_ai'
   |     |- api.js           <- callChatAPI(), getSettings(), providerConfigs, tavilySearch(), tinyfishSearch()
   |     |- tools.js         <- OpenAI function-calling tool definitions + executeTool()
   |- (sidepanel.js, options.js are standalone page scripts, not imported by background)
 ```
 
-**Two UI surfaces:**
+**Three UI surfaces:**
 - **Options page** (`options.html/js`) — API key config, provider/model selection, search API keys, voice picker. Saves to `chrome.storage.sync`.
 - **Sidepanel** (`sidepanel.html/js`) — Chat interface. Sends `{action: 'chat'}` messages to background. Receives markdown-rendered replies.
+- **Gmail integration** (`gmail-features.js`) — Injected into Gmail via main-world scripts. Adds Summarize/Explain/Draft Reply buttons to email toolbar. Results shown in modal overlay; drafts can be inserted into reply compose box.
 
-**Content injected into web pages:** `utilities.js` and `tts.js` use `chrome.scripting.executeScript` to inject overlays and TTS UI directly into page DOM. No separate content scripts.
+**Content injected into web pages:** `utilities.js` and `tts.js` use `chrome.scripting.executeScript` to inject overlays and TTS UI directly into page DOM. Gmail integration uses a dedicated content script (`gmail-init.js`) that injects main-world scripts.
+
+## Gmail Integration Architecture
+
+The Gmail feature uses a two-phase injection pattern (required by gmail.js):
+
+1. **`gmail-init.js`** (content script, `run_at: document_start`) — injects `<script>` tags into Gmail's main world
+2. **`gmail-loader.js`** (main world) — initializes gmail.js + jQuery, stores instance on `globalThis._aibuddy_gmail`
+3. **`gmail-features.js`** (main world) — waits for gmail.js, observes thread views, injects AI buttons
+
+**Communication:** Main-world scripts cannot access `chrome.runtime`. Messages flow: `gmail-features.js` → `globalThis.postMessage` → `gmail-init.js` (content script) → `chrome.runtime.sendMessage` → `background.js` → `handleGmailAiMessage()` → `callChatAPI()` → response flows back the same chain.
+
+**Vendored deps:** `vendor/jquery.min.js` (full build, needed by gmail.js AJAX), `vendor/gmail.min.js` (DOM/XHR interception library). Both excluded from ESLint via `release/config/eslint.config.mjs` ignores.
 
 ## Key Patterns
 
